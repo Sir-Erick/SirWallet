@@ -15,17 +15,19 @@ function App() {
   const chatEndRef = useRef(null);
 
   async function login() {
-    const response = await fetch("http://127.0.0.1:8000/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await fetch(
+      "https://sirwallet-production-b6cc.up.railway.app/login",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       },
-
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    });
+    );
 
     const data = await response.json();
 
@@ -53,23 +55,24 @@ function App() {
   }
 
   async function register() {
-    const response = await fetch("http://127.0.0.1:8000/register", {
-      method: "POST",
-
-      headers: {
-        "Content-Type": "application/json",
+    const response = await fetch(
+      "https://sirwallet-production-b6cc.up.railway.app/register",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+        }),
       },
-
-      body: JSON.stringify({
-        username,
-        email,
-        password,
-      }),
-    });
+    );
 
     const data = await response.json();
 
-    if (data.message === "Register berhasil") {
+    if (data.message === "Register berhasil.") {
       alert("Register berhasil 🎉");
 
       setIsRegister(false);
@@ -94,19 +97,12 @@ function App() {
 
     // DOWNLOAD LAPORAN
     if (message.toLowerCase().includes("download laporan")) {
-      const userMessage = {
-        sender: "user",
-        text: message,
-      };
-
-      setChat((prev) => [...prev, userMessage]);
-
       const response = await fetch(
-        `http://127.0.0.1:8000/chat-download?text=${encodeURIComponent(message)}`,
+        `https://sirwallet-production-b6cc.up.railway.app/chat-download?text=${encodeURIComponent(message)}`,
       );
 
       // KALAU TIDAK ADA DATA
-      if (response.headers.get("content-type").includes("application/json")) {
+      if (response.headers.get("content-type")?.includes("application/json")) {
         const data = await response.json();
 
         const botMessage = {
@@ -149,16 +145,20 @@ function App() {
 
       return;
     }
-    const response = await fetch("http://127.0.0.1:8000/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+
+    const response = await fetch(
+      "https://sirwallet-production-b6cc.up.railway.app/chat",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: message,
+          user_id: user.user_id,
+        }),
       },
-      body: JSON.stringify({
-        text: message,
-        user_id: user.user_id,
-      }),
-    });
+    );
 
     const data = await response.json();
 
