@@ -1,3 +1,4 @@
+import { Filesystem, Directory } from "@capacitor/filesystem";
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
 
@@ -120,26 +121,37 @@ function App() {
       // KALAU FILE ADA
       const blob = await response.blob();
 
-      const url = window.URL.createObjectURL(blob);
+      const reader = new FileReader();
 
-      const a = document.createElement("a");
+      reader.readAsDataURL(blob);
 
-      a.href = url;
+      reader.onloadend = async () => {
+        const base64data = reader.result.split(",")[1];
 
-      a.download = "laporan_keuangan.xlsx";
+        try {
+          await Filesystem.writeFile({
+            path: "laporan_keuangan.xlsx",
+            data: base64data,
+            directory: Directory.Documents,
+          });
 
-      document.body.appendChild(a);
-
-      a.click();
-
-      a.remove();
-
-      const botMessage = {
-        sender: "bot",
-        text: "📥 Laporan berhasil didownload.",
+          setChat((prev) => [
+            ...prev,
+            {
+              sender: "bot",
+              text: "📥 Laporan berhasil didownload dan disimpan di folder Documents.",
+            },
+          ]);
+        } catch {
+          setChat((prev) => [
+            ...prev,
+            {
+              sender: "bot",
+              text: "📥 Laporan berhasil didownload.",
+            },
+          ]);
+        }
       };
-
-      setChat((prev) => [...prev, botMessage]);
 
       setMessage("");
 
@@ -185,6 +197,35 @@ function App() {
       setUser(JSON.parse(savedUser));
     }
   }, []);
+
+  useEffect(() => {
+    if (user && chat.length === 0) {
+      setChat([
+        {
+          sender: "bot",
+          text: `👋 Halo ${user.username}!
+
+Selamat datang di SirWallet 💼
+
+Saya bisa membantu mencatat dan mengelola keuanganmu.
+
+📌 Contoh transaksi:
+• pemasukan 500rb gaji
+• pengeluaran 25000 makan
+
+📌 Informasi:
+• saldo saya
+
+📌 Download laporan:
+• download laporan
+• download laporan april
+• download laporan mei
+
+Silakan mulai mencatat 😊`,
+        },
+      ]);
+    }
+  }, [user]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({

@@ -1,6 +1,8 @@
 import calendar
 import re
 from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 from fastapi.responses import FileResponse
 from datetime import datetime, timedelta
 from fastapi import FastAPI
@@ -224,6 +226,211 @@ def register(data: RegisterRequest):
     return {
         "message": "Register berhasil."
     }
+
+# ==================================
+# HELPER: BUAT LAPORAN EXCEL 3 SHEET
+# ==================================
+def buat_laporan_excel(transactions, nama_bulan: str, tahun: int):
+
+    wb = Workbook()
+
+    # --- STYLE HELPERS ---
+    def header_style(ws, row, col, value, bg_hex, font_color="FFFFFF"):
+        cell = ws.cell(row=row, column=col, value=value)
+        cell.font = Font(bold=True, color=font_color, size=11)
+        cell.fill = PatternFill("solid", fgColor=bg_hex)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
+        return cell
+
+    def data_style(ws, row, col, value, number_format=None):
+        cell = ws.cell(row=row, column=col, value=value)
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+        cell.border = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
+        if number_format:
+            cell.number_format = number_format
+        return cell
+
+    def set_col_widths(ws, widths):
+        for i, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+    pemasukan_list = [t for t in transactions if t.type == "pemasukan"]
+    pengeluaran_list = [t for t in transactions if t.type == "pengeluaran"]
+
+    total_masuk = sum(t.amount for t in pemasukan_list)
+    total_keluar = sum(t.amount for t in pengeluaran_list)
+    saldo = total_masuk - total_keluar
+
+    # =====================================
+    # SHEET 1: RINGKASAN
+    # =====================================
+    ws1 = wb.active
+    ws1.title = "Ringkasan"
+    ws1.row_dimensions[1].height = 32
+    ws1.row_dimensions[2].height = 20
+
+    # Judul
+    ws1.merge_cells("A1:C1")
+    title_cell = ws1["A1"]
+    title_cell.value = f"💼 SirWallet — Laporan {nama_bulan} {tahun}"
+    title_cell.font = Font(bold=True, size=14, color="111827")
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    title_cell.fill = PatternFill("solid", fgColor="F3F4F6")
+
+    # Header tabel ringkasan
+    header_style(ws1, 3, 1, "Keterangan",   "111827")
+    header_style(ws1, 3, 2, "Jumlah (Rp)",  "111827")
+    header_style(ws1, 3, 3, "Transaksi",    "111827")
+
+    rows_ringkasan = [
+        ("💰 Total Pemasukan",  total_masuk,  len(pemasukan_list)),
+        ("💸 Total Pengeluaran", total_keluar, len(pengeluaran_list)),
+        ("💳 Saldo Akhir",       saldo,        len(transactions)),
+    ]
+
+    colors = ["D1FAE5", "FEE2E2", "DBEAFE"]
+    font_colors = ["065F46", "991B1B", "1E3A5F"]
+
+    for i, (ket, jml, jlh) in enumerate(rows_ringkasan, 4):
+        ws1.row_dimensions[i].height = 22
+        c1 = ws1.cell(row=i, column=1, value=ket)
+        c1.font = Font(bold=True, color=font_colors[i-4])
+        c1.fill = PatternFill("solid", fgColor=colors[i-4])
+        c1.alignment = Alignment(vertical="center")
+        c1.border = Border(left=Side(style="thin"), right=Side(style="thin"),
+                           top=Side(style="thin"), bottom=Side(style="thin"))
+
+        c2 = ws1.cell(row=i, column=2, value=jml)
+        c2.font = Font(bold=True, color=font_colors[i-4])
+        c2.fill = PatternFill("solid", fgColor=colors[i-4])
+        c2.number_format = '#,##0'
+        c2.alignment = Alignment(horizontal="right", vertical="center")
+        c2.border = Border(left=Side(style="thin"), right=Side(style="thin"),
+                           top=Side(style="thin"), bottom=Side(style="thin"))
+
+        c3 = ws1.cell(row=i, column=3, value=jlh)
+        c3.font = Font(color=font_colors[i-4])
+        c3.fill = PatternFill("solid", fgColor=colors[i-4])
+        c3.alignment = Alignment(horizontal="center", vertical="center")
+        c3.border = Border(left=Side(style="thin"), right=Side(style="thin"),
+                           top=Side(style="thin"), bottom=Side(style="thin"))
+
+    # Ringkasan per kategori pengeluaran
+    ws1.cell(row=8, column=1, value="📊 Ringkasan Pengeluaran per Kategori").font = Font(bold=True, size=11)
+    ws1.merge_cells("A8:C8")
+    ws1["A8"].alignment = Alignment(horizontal="left")
+
+    header_style(ws1, 9, 1, "Kategori",     "374151")
+    header_style(ws1, 9, 2, "Total (Rp)",   "374151")
+    header_style(ws1, 9, 3, "Jumlah Transaksi", "374151")
+
+    kategori_map = {}
+    for t in pengeluaran_list:
+        k = t.category or "Lainnya"
+        kategori_map[k] = kategori_map.get(k, {"total": 0, "count": 0})
+        kategori_map[k]["total"] += t.amount
+        kategori_map[k]["count"] += 1
+
+    row_idx = 10
+    for kat, val in sorted(kategori_map.items(), key=lambda x: -x[1]["total"]):
+        ws1.row_dimensions[row_idx].height = 20
+        data_style(ws1, row_idx, 1, kat)
+        c = data_style(ws1, row_idx, 2, val["total"], '#,##0')
+        c.alignment = Alignment(horizontal="right")
+        data_style(ws1, row_idx, 3, val["count"]).alignment = Alignment(horizontal="center")
+        row_idx += 1
+
+    set_col_widths(ws1, [28, 20, 18])
+
+    # =====================================
+    # SHEET 2: PEMASUKAN
+    # =====================================
+    ws2 = wb.create_sheet("Pemasukan")
+    ws2.row_dimensions[1].height = 28
+
+    ws2.merge_cells("A1:E1")
+    t = ws2["A1"]
+    t.value = f"💰 Pemasukan — {nama_bulan} {tahun}"
+    t.font = Font(bold=True, size=13, color="065F46")
+    t.fill = PatternFill("solid", fgColor="D1FAE5")
+    t.alignment = Alignment(horizontal="center", vertical="center")
+
+    headers = ["No", "Tanggal", "Kategori", "Catatan", "Jumlah (Rp)"]
+    for col, h in enumerate(headers, 1):
+        header_style(ws2, 2, col, h, "059669")
+
+    for i, item in enumerate(sorted(pemasukan_list, key=lambda x: x.created_at), 1):
+        r = i + 2
+        ws2.row_dimensions[r].height = 20
+        data_style(ws2, r, 1, i).alignment = Alignment(horizontal="center")
+        data_style(ws2, r, 2, item.created_at.strftime("%d-%m-%Y %H:%M"))
+        data_style(ws2, r, 3, item.category or "-")
+        data_style(ws2, r, 4, item.note or "-")
+        c = data_style(ws2, r, 5, item.amount, '#,##0')
+        c.alignment = Alignment(horizontal="right")
+
+    # Baris total
+    total_row = len(pemasukan_list) + 3
+    ws2.cell(row=total_row, column=4, value="TOTAL").font = Font(bold=True)
+    ws2.cell(row=total_row, column=4).alignment = Alignment(horizontal="right")
+    tc = ws2.cell(row=total_row, column=5, value=total_masuk)
+    tc.font = Font(bold=True, color="065F46")
+    tc.number_format = '#,##0'
+    tc.alignment = Alignment(horizontal="right")
+    tc.fill = PatternFill("solid", fgColor="D1FAE5")
+
+    set_col_widths(ws2, [5, 18, 16, 40, 18])
+
+    # =====================================
+    # SHEET 3: PENGELUARAN
+    # =====================================
+    ws3 = wb.create_sheet("Pengeluaran")
+    ws3.row_dimensions[1].height = 28
+
+    ws3.merge_cells("A1:E1")
+    t3 = ws3["A1"]
+    t3.value = f"💸 Pengeluaran — {nama_bulan} {tahun}"
+    t3.font = Font(bold=True, size=13, color="991B1B")
+    t3.fill = PatternFill("solid", fgColor="FEE2E2")
+    t3.alignment = Alignment(horizontal="center", vertical="center")
+
+    for col, h in enumerate(headers, 1):
+        header_style(ws3, 2, col, h, "DC2626")
+
+    for i, item in enumerate(sorted(pengeluaran_list, key=lambda x: x.created_at), 1):
+        r = i + 2
+        ws3.row_dimensions[r].height = 20
+        data_style(ws3, r, 1, i).alignment = Alignment(horizontal="center")
+        data_style(ws3, r, 2, item.created_at.strftime("%d-%m-%Y %H:%M"))
+        data_style(ws3, r, 3, item.category or "-")
+        data_style(ws3, r, 4, item.note or "-")
+        c = data_style(ws3, r, 5, item.amount, '#,##0')
+        c.alignment = Alignment(horizontal="right")
+
+    total_row3 = len(pengeluaran_list) + 3
+    ws3.cell(row=total_row3, column=4, value="TOTAL").font = Font(bold=True)
+    ws3.cell(row=total_row3, column=4).alignment = Alignment(horizontal="right")
+    tc3 = ws3.cell(row=total_row3, column=5, value=total_keluar)
+    tc3.font = Font(bold=True, color="991B1B")
+    tc3.number_format = '#,##0'
+    tc3.alignment = Alignment(horizontal="right")
+    tc3.fill = PatternFill("solid", fgColor="FEE2E2")
+
+    set_col_widths(ws3, [5, 18, 16, 40, 18])
+
+    return wb
+
 
 # =========================
 # CHAT AI
@@ -812,62 +1019,29 @@ def chat(message: Message):
         bulan = now.month
         tahun = now.year
 
-        # DETEKSI BULAN DARI CHAT
         for nama_bulan, nomor_bulan in bulan_map.items():
-
             if nama_bulan in text:
                 bulan = nomor_bulan
 
-        # DETEKSI TAHUN
         tahun_match = re.search(r'20\d{2}', text)
-
         if tahun_match:
             tahun = int(tahun_match.group())
 
         transactions = db.query(Transaction).all()
 
-        wb = Workbook()
+        filtered = [
+            item for item in transactions
+            if item.created_at.month == bulan and item.created_at.year == tahun
+        ]
 
-        ws = wb.active
-        ws.title = "Laporan Keuangan"
+        if not filtered:
+            return {"reply": "Tidak ada data di bulan tersebut."}
 
-        ws.append([
-            "Tipe",
-            "Kategori",
-            "Jumlah",
-            "Catatan",
-            "Tanggal"
-        ])
-
-        total_data = 0
-
-        for item in transactions:
-
-            if (
-                item.created_at.month == bulan
-                and item.created_at.year == tahun
-            ):
-
-                ws.append([
-                    item.type,
-                    item.category,
-                    item.amount,
-                    item.note,
-                    item.created_at.strftime("%d-%m-%Y %H:%M")
-                ])
-
-                total_data += 1
-
-        if total_data == 0:
-
-            return {
-                "reply": "Tidak ada data di bulan tersebut."
-            }
-
+        nama_bulan_display = list(bulan_map.keys())[bulan - 1].capitalize()
         nama_bulan_file = list(bulan_map.keys())[bulan - 1]
-
         file_name = f"laporan_{nama_bulan_file}_{tahun}.xlsx"
 
+        wb = buat_laporan_excel(filtered, nama_bulan_display, tahun)
         wb.save(file_name)
 
         return FileResponse(
@@ -916,58 +1090,28 @@ def download_laporan(text: str):
     tahun = now.year
 
     for nama_bulan, nomor_bulan in bulan_map.items():
-
         if nama_bulan in text.lower():
             bulan = nomor_bulan
 
     tahun_match = re.search(r'20\d{2}', text)
-
     if tahun_match:
         tahun = int(tahun_match.group())
 
     transactions = db.query(Transaction).all()
 
-    wb = Workbook()
+    filtered = [
+        item for item in transactions
+        if item.created_at.month == bulan and item.created_at.year == tahun
+    ]
 
-    ws = wb.active
-    ws.title = "Laporan Keuangan"
+    if not filtered:
+        return {"reply": "Tidak ada data di bulan tersebut."}
 
-    ws.append([
-        "Tipe",
-        "Kategori",
-        "Jumlah",
-        "Catatan",
-        "Tanggal"
-    ])
-
-    total_data = 0
-
-    for item in transactions:
-
-        if (
-            item.created_at.month == bulan
-            and item.created_at.year == tahun
-        ):
-
-            ws.append([
-                item.type,
-                item.category,
-                item.amount,
-                item.note,
-                item.created_at.strftime("%d-%m-%Y %H:%M")
-            ])
-
-            total_data += 1
-
-    if total_data == 0:
-        return {
-            "reply": "Tidak ada data di bulan tersebut."
-        }
-
+    nama_bulan_display = list(bulan_map.keys())[bulan - 1].capitalize()
     nama_bulan_file = list(bulan_map.keys())[bulan - 1]
-
     file_name = f"laporan_{nama_bulan_file}_{tahun}.xlsx"
 
+    wb = buat_laporan_excel(filtered, nama_bulan_display, tahun)
     wb.save(file_name)
 
     return FileResponse(
