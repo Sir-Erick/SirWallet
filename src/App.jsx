@@ -5,15 +5,15 @@ import "./App.css";
 const BASE_URL = "https://sirwallet-production-b6cc.up.railway.app";
 
 function App() {
-  const [message, setMessage]         = useState("");
-  const [chat, setChat]               = useState([]);
-  const [username, setUsername]       = useState("");
-  const [email, setEmail]             = useState("");
-  const [password, setPassword]       = useState("");
-  const [user, setUser]               = useState(null);
-  const [isRegister, setIsRegister]   = useState(false);
+  const [message, setMessage] = useState("");
+  const [chat, setChat] = useState([]);
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [user, setUser] = useState(null);
+  const [isRegister, setIsRegister] = useState(false);
   const [showCommands, setShowCommands] = useState(false);
-  const [isLoading, setIsLoading]     = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const chatEndRef = useRef(null);
 
   // ─── AUTH ────────────────────────────────────────────────
@@ -101,10 +101,18 @@ function App() {
   async function handleDownloadLaporan(text) {
     // Deteksi nama bulan dari teks untuk nama file
     const bulanMap = {
-      januari: "januari", februari: "februari", maret: "maret",
-      april: "april", mei: "mei", juni: "juni", juli: "juli",
-      agustus: "agustus", september: "september", oktober: "oktober",
-      november: "november", desember: "desember",
+      januari: "januari",
+      februari: "februari",
+      maret: "maret",
+      april: "april",
+      mei: "mei",
+      juni: "juni",
+      juli: "juli",
+      agustus: "agustus",
+      september: "september",
+      oktober: "oktober",
+      november: "november",
+      desember: "desember",
     };
 
     const textLower = text.toLowerCase();
@@ -124,8 +132,18 @@ function App() {
     if (!namaBulanFile) {
       // Bulan sekarang jika tidak disebutkan
       const bln = [
-        "januari","februari","maret","april","mei","juni",
-        "juli","agustus","september","oktober","november","desember",
+        "januari",
+        "februari",
+        "maret",
+        "april",
+        "mei",
+        "juni",
+        "juli",
+        "agustus",
+        "september",
+        "oktober",
+        "november",
+        "desember",
       ];
       namaBulanFile = bln[new Date().getMonth()];
     }
@@ -134,7 +152,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/chat-download?text=${encodeURIComponent(text)}`
+        `${BASE_URL}/chat-download?text=${encodeURIComponent(text)}`,
       );
 
       // Cek apakah respons adalah JSON (berarti tidak ada data)
@@ -143,7 +161,10 @@ function App() {
         const data = await response.json();
         setChat((prev) => [
           ...prev,
-          { sender: "bot", text: data.reply || "Tidak ada data di bulan tersebut." },
+          {
+            sender: "bot",
+            text: data.reply || "Tidak ada data di bulan tersebut.",
+          },
         ]);
         return;
       }
@@ -158,9 +179,10 @@ function App() {
           {
             sender: "bot",
             text:
-              `✅ Laporan berhasil didownload!\n\n` +
-              `📁 Disimpan di:\n${saved.path}\n\n` +
-              `📄 Nama file: ${fileName}`,
+              `📊 Laporan keuangan berhasil dibuat.\n\n` +
+              `📄 File: ${fileName}\n` +
+              `📁 Lokasi: ${saved.path}\n\n` +
+              `Silakan buka File Manager untuk melihat atau membagikan laporan.`,
           },
         ]);
       } else {
@@ -171,9 +193,10 @@ function App() {
           {
             sender: "bot",
             text:
-              `✅ Laporan berhasil didownload!\n\n` +
+              `📊 Laporan keuangan berhasil dibuat.\n\n` +
               `📄 File: ${fileName}\n` +
-              `📁 Cek folder Downloads di HP kamu.`,
+              `📁 Lokasi: ${saved.path}\n\n` +
+              `Silakan buka File Manager untuk melihat atau membagikan laporan.`,
           },
         ]);
       }
@@ -196,14 +219,14 @@ function App() {
         const reader = new FileReader();
         reader.readAsDataURL(blob);
         reader.onloadend = () => resolve(reader.result.split(",")[1]);
-        reader.onerror  = () => reject(new Error("FileReader gagal"));
+        reader.onerror = () => reject(new Error("FileReader gagal"));
       });
 
       // Coba simpan ke Documents dulu, fallback ke Downloads
       const directories = [
+        { dir: Directory.External, label: "Download/SirWallet" },
         { dir: Directory.Documents, label: "Documents/SirWallet" },
-        { dir: Directory.External,  label: "Downloads" },
-        { dir: Directory.Data,      label: "Internal Storage/SirWallet" },
+        { dir: Directory.Data, label: "Internal Storage/SirWallet" },
       ];
 
       for (const { dir, label } of directories) {
@@ -212,7 +235,7 @@ function App() {
             path: `SirWallet/${fileName}`,
             data: base64data,
             directory: dir,
-            recursive: true,       // otomatis buat folder SirWallet
+            recursive: true, // otomatis buat folder SirWallet
           });
           return {
             success: true,
@@ -234,9 +257,9 @@ function App() {
 
   // ─── FALLBACK: DOWNLOAD VIA BROWSER (PWA / Web) ──────────
   function downloadViaBrowser(blob, fileName) {
-    const url  = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href  = url;
+    link.href = url;
     link.download = fileName;
     document.body.appendChild(link);
     link.click();
@@ -370,7 +393,9 @@ function App() {
 
         {isLoading && (
           <div className="message bot loading-indicator">
-            <span>.</span><span>.</span><span>.</span>
+            <span>.</span>
+            <span>.</span>
+            <span>.</span>
           </div>
         )}
 

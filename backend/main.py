@@ -69,6 +69,121 @@ def login(data: LoginRequest):
 def root():
     return {"message": "Finance AI Backend Running"}
 
+# ==========================
+# HELPER: FITUR LAPORAN
+# ==========================
+
+def generate_report(
+    filtered_transactions,
+    judul_laporan,
+    limit_detail=None
+):
+
+    pemasukan_total = 0
+    pengeluaran_total = 0
+
+    kategori_pemasukan = {}
+    kategori_pengeluaran = {}
+
+    for item in filtered_transactions:
+
+        if item.type == "pemasukan":
+
+            pemasukan_total += item.amount
+
+            kategori_pemasukan[item.category] = (
+                kategori_pemasukan.get(item.category, 0)
+                + item.amount
+            )
+
+        else:
+
+            pengeluaran_total += item.amount
+
+            kategori_pengeluaran[item.category] = (
+                kategori_pengeluaran.get(item.category, 0)
+                + item.amount
+            )
+
+    saldo = pemasukan_total - pengeluaran_total
+
+    response = f"📊 {judul_laporan}\n\n"
+
+    # ==========================
+    # RINGKASAN PEMASUKAN
+    # ==========================
+    response += "💰 PEMASUKAN\n"
+
+    if kategori_pemasukan:
+
+        for kategori, jumlah in kategori_pemasukan.items():
+
+            response += f"• {kategori}: Rp{jumlah:,}\n"
+
+    else:
+
+        response += "Tidak ada pemasukan\n"
+
+    response += f"\nTotal pemasukan: Rp{pemasukan_total:,}\n\n"
+
+    # ==========================
+    # RINGKASAN PENGELUARAN
+    # ==========================
+    response += "💸 PENGELUARAN\n"
+
+    if kategori_pengeluaran:
+
+        for kategori, jumlah in kategori_pengeluaran.items():
+
+            response += f"• {kategori}: Rp{jumlah:,}\n"
+
+    else:
+
+        response += "Tidak ada pengeluaran\n"
+
+    response += f"\nTotal pengeluaran: Rp{pengeluaran_total:,}\n\n"
+
+    response += f"💳 Sisa saldo: Rp{saldo:,}\n\n"
+
+    # ==========================
+    # DETAIL TRANSAKSI
+    # ==========================
+    response += "📝 DETAIL TRANSAKSI\n\n"
+
+    if not filtered_transactions:
+
+        response += "Tidak ada transaksi."
+
+        return response
+
+    filtered_transactions.sort(
+    key=lambda x: x.created_at,
+    reverse=True
+)
+
+    detail_transactions = filtered_transactions
+
+    if limit_detail:
+        detail_transactions = filtered_transactions[:limit_detail]
+
+    response += (
+        f"Menampilkan {limit_detail} transaksi terbaru.\n"
+        f"Gunakan Download Laporan untuk melihat seluruh data periode ini.\n\n"
+    )
+
+    for item in detail_transactions:
+
+        tanggal = item.created_at.strftime("%d/%m/%Y • %H:%M")
+
+        emoji = "🟢" if item.type == "pemasukan" else "🔴"
+
+        response += (
+            f"{tanggal}\n"
+            f"{emoji} {item.type.capitalize()} | {item.category}\n"
+            f"Rp{item.amount:,}\n\n"
+        )
+
+    return response
 
 # =========================
 # DETECT CATEGORY
@@ -653,63 +768,16 @@ def chat(message: Message):
 
         transactions = db.query(Transaction).all()
 
-        pemasukan_total = 0
-        pengeluaran_total = 0
+        filtered_transactions = [
+        item
+        for item in transactions
+            if item.created_at.date() == today
+    ]
 
-        kategori_pemasukan = {}
-        kategori_pengeluaran = {}
-
-        for item in transactions:
-
-            if item.created_at.date() == today:
-
-                if item.type == "pemasukan":
-
-                    pemasukan_total += item.amount
-
-                    kategori_pemasukan[item.category] = (
-                        kategori_pemasukan.get(item.category, 0)
-                        + item.amount
-                    )
-
-                else:
-
-                    pengeluaran_total += item.amount
-
-                    kategori_pengeluaran[item.category] = (
-                        kategori_pengeluaran.get(item.category, 0)
-                        + item.amount
-                    )
-
-        saldo = pemasukan_total - pengeluaran_total
-
-        response = "📊 LAPORAN HARIAN\n\n"
-
-        response += "💰 PEMASUKAN\n"
-
-        if kategori_pemasukan:
-
-            for kategori, jumlah in kategori_pemasukan.items():
-                response += f"• {kategori}: Rp{jumlah:,}\n"
-
-        else:
-            response += "Tidak ada pemasukan\n"
-
-        response += f"\nTotal pemasukan: Rp{pemasukan_total:,}\n\n"
-
-        response += "💸 PENGELUARAN\n"
-
-        if kategori_pengeluaran:
-
-            for kategori, jumlah in kategori_pengeluaran.items():
-                response += f"• {kategori}: Rp{jumlah:,}\n"
-
-        else:
-            response += "Tidak ada pengeluaran\n"
-
-        response += f"\nTotal pengeluaran: Rp{pengeluaran_total:,}\n\n"
-
-        response += f"💳 Sisa saldo: Rp{saldo:,}"
+        response = generate_report(
+        filtered_transactions,
+        "LAPORAN HARIAN"
+    )
 
     # ==================================
     # LAPORAN MINGGUAN
@@ -720,63 +788,16 @@ def chat(message: Message):
 
         transactions = db.query(Transaction).all()
 
-        pemasukan_total = 0
-        pengeluaran_total = 0
+        filtered_transactions = [
+        item
+        for item in transactions
+            if item.created_at >= minggu_lalu
+    ]
 
-        kategori_pemasukan = {}
-        kategori_pengeluaran = {}
-
-        for item in transactions:
-
-            if item.created_at >= minggu_lalu:
-
-                if item.type == "pemasukan":
-
-                    pemasukan_total += item.amount
-
-                    kategori_pemasukan[item.category] = (
-                        kategori_pemasukan.get(item.category, 0)
-                        + item.amount
-                    )
-
-                else:
-
-                    pengeluaran_total += item.amount
-
-                    kategori_pengeluaran[item.category] = (
-                        kategori_pengeluaran.get(item.category, 0)
-                        + item.amount
-                    )
-
-        saldo = pemasukan_total - pengeluaran_total
-
-        response = "📊 LAPORAN MINGGUAN\n\n"
-
-        response += "💰 PEMASUKAN\n"
-
-        if kategori_pemasukan:
-
-            for kategori, jumlah in kategori_pemasukan.items():
-                response += f"• {kategori}: Rp{jumlah:,}\n"
-
-        else:
-            response += "Tidak ada pemasukan\n"
-
-        response += f"\nTotal pemasukan: Rp{pemasukan_total:,}\n\n"
-
-        response += "💸 PENGELUARAN\n"
-
-        if kategori_pengeluaran:
-
-            for kategori, jumlah in kategori_pengeluaran.items():
-                response += f"• {kategori}: Rp{jumlah:,}\n"
-
-        else:
-            response += "Tidak ada pengeluaran\n"
-
-        response += f"\nTotal pengeluaran: Rp{pengeluaran_total:,}\n\n"
-
-        response += f"💳 Sisa saldo: Rp{saldo:,}"
+        response = generate_report(
+        filtered_transactions,
+        "LAPORAN MINGGUAN"
+    )
 
     # ==================================
     # LAPORAN BULANAN
@@ -787,64 +808,17 @@ def chat(message: Message):
 
         transactions = db.query(Transaction).all()
 
-        pemasukan_total = 0
-        pengeluaran_total = 0
+        filtered_transactions = [
+        item
+        for item in transactions
+            if item.created_at >= bulan_lalu
+    ]
 
-        kategori_pemasukan = {}
-        kategori_pengeluaran = {}
-
-        for item in transactions:
-
-            if item.created_at >= bulan_lalu:
-
-                if item.type == "pemasukan":
-
-                    pemasukan_total += item.amount
-
-                    kategori_pemasukan[item.category] = (
-                        kategori_pemasukan.get(item.category, 0)
-                        + item.amount
-                    )
-
-                else:
-
-                    pengeluaran_total += item.amount
-
-                    kategori_pengeluaran[item.category] = (
-                        kategori_pengeluaran.get(item.category, 0)
-                        + item.amount
-                    )
-
-        saldo = pemasukan_total - pengeluaran_total
-
-        response = "📊 LAPORAN BULANAN\n\n"
-
-        response += "💰 PEMASUKAN\n"
-
-        if kategori_pemasukan:
-
-            for kategori, jumlah in kategori_pemasukan.items():
-                response += f"• {kategori}: Rp{jumlah:,}\n"
-
-        else:
-            response += "Tidak ada pemasukan\n"
-
-        response += f"\nTotal pemasukan: Rp{pemasukan_total:,}\n\n"
-
-        response += "💸 PENGELUARAN\n"
-
-        if kategori_pengeluaran:
-
-            for kategori, jumlah in kategori_pengeluaran.items():
-                response += f"• {kategori}: Rp{jumlah:,}\n"
-
-        else:
-            response += "Tidak ada pengeluaran\n"
-
-        response += f"\nTotal pengeluaran: Rp{pengeluaran_total:,}\n\n"
-
-        response += f"💳 Sisa saldo: Rp{saldo:,}"
-
+        response = generate_report(
+        filtered_transactions,
+        "LAPORAN BULANAN",
+        limit_detail=30
+    )
     # ==================================
     # SALDO
     # ==================================
@@ -1115,7 +1089,11 @@ def download_laporan(text: str):
     if tahun_match:
         tahun = int(tahun_match.group())
 
-    transactions = db.query(Transaction).all()
+    transactions = (
+    db.query(Transaction)
+    .filter(Transaction.user_id == user_id)
+    .all()
+)
 
     filtered = [
         item for item in transactions
