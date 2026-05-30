@@ -1,9 +1,11 @@
 import calendar
+import os
+import tempfile
 import re
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from datetime import datetime, timedelta
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -1042,14 +1044,30 @@ def chat(message: Message):
         file_name = f"laporan_{nama_bulan_file}_{tahun}.xlsx"
 
         wb = buat_laporan_excel(filtered, nama_bulan_display, tahun)
-        wb.save(file_name)
 
-        return FileResponse(
-            path=file_name,
-            filename=file_name,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        # Simpan ke tempfile agar aman di server multi-request
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            tmp_path = tmp.name
+
+        wb.save(tmp_path)
+
+        # Baca file lalu hapus dari server setelah dikirim
+        with open(tmp_path, "rb") as f:
+            file_bytes = f.read()
+
+        os.remove(tmp_path)
+
+        from fastapi.responses import Response
+        return Response(
+            content=file_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_name}"',
+                "Content-Length": str(len(file_bytes)),
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            }
         )
-    
+
     # ==================================
     # DEFAULT
     # ==================================
@@ -1112,10 +1130,26 @@ def download_laporan(text: str):
     file_name = f"laporan_{nama_bulan_file}_{tahun}.xlsx"
 
     wb = buat_laporan_excel(filtered, nama_bulan_display, tahun)
-    wb.save(file_name)
 
-    return FileResponse(
-        path=file_name,
-        filename=file_name,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    # Simpan ke tempfile agar aman di server multi-request
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+        tmp_path = tmp.name
+
+    wb.save(tmp_path)
+
+    # Baca file lalu hapus dari server setelah dikirim
+    with open(tmp_path, "rb") as f:
+        file_bytes = f.read()
+
+    os.remove(tmp_path)
+
+    from fastapi.responses import Response
+    return Response(
+        content=file_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{file_name}"',
+            "Content-Length": str(len(file_bytes)),
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        }
     )
